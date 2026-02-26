@@ -1,0 +1,6 @@
+node_modules/
+.env
+admin-ui/node_modules/
+admin-ui/dist/
+*.log
+.DS_Store

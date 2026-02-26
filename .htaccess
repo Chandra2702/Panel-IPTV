@@ -1,0 +1,9 @@
+RewriteEngine On
+RewriteBase /Panel-IPTV/
+
+# Xtream Codes API Redirection
+# Requests to /live/username/password/stream_id.ts -> stream.php
+RewriteRule ^live/([^/]+)/([^/]+)/([^/.]+)(?:\.(ts|m3u8))?$ stream.php?username=$1&password=$2&stream_id=$3&ext=$4 [L,QSA]
+
+# Test Rule for Monitoring Diagnosis
+RewriteRule ^monitor_check$ scripts/check_ht.php [L]

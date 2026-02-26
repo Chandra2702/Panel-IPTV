@@ -101,7 +101,7 @@ gather_config() {
     elif [ "$CLI_NON_INTERACTIVE" = "true" ]; then
         APP_PORT="$DEFAULT_PORT"
     else
-        read -p "$(echo -e "${CYAN}Port Panel Server${NC} [${DEFAULT_PORT}]: ")" APP_PORT
+        read -p "$(echo -e "${CYAN}Port Panel Server${NC} [${DEFAULT_PORT}]: ")" APP_PORT </dev/tty
         APP_PORT=${APP_PORT:-$DEFAULT_PORT}
     fi
 
@@ -112,7 +112,7 @@ gather_config() {
     elif [ "$CLI_NON_INTERACTIVE" = "true" ]; then
         DB_ROOT_PASS=""
     else
-        read -sp "$(echo -e "${CYAN}MySQL Root Password${NC}: ")" DB_ROOT_PASS
+        read -sp "$(echo -e "${CYAN}MySQL Root Password${NC}: ")" DB_ROOT_PASS </dev/tty
         echo ""
     fi
 
@@ -121,7 +121,7 @@ gather_config() {
     elif [ "$CLI_NON_INTERACTIVE" = "true" ]; then
         DB_NAME="$DEFAULT_DB_NAME"
     else
-        read -p "$(echo -e "${CYAN}Database Name${NC} [${DEFAULT_DB_NAME}]: ")" DB_NAME
+        read -p "$(echo -e "${CYAN}Database Name${NC} [${DEFAULT_DB_NAME}]: ")" DB_NAME </dev/tty
         DB_NAME=${DB_NAME:-$DEFAULT_DB_NAME}
     fi
 
@@ -130,7 +130,7 @@ gather_config() {
     elif [ "$CLI_NON_INTERACTIVE" = "true" ]; then
         DB_USER="$DEFAULT_DB_USER"
     else
-        read -p "$(echo -e "${CYAN}Database User${NC} [${DEFAULT_DB_USER}]: ")" DB_USER
+        read -p "$(echo -e "${CYAN}Database User${NC} [${DEFAULT_DB_USER}]: ")" DB_USER </dev/tty
         DB_USER=${DB_USER:-$DEFAULT_DB_USER}
     fi
 
@@ -140,7 +140,7 @@ gather_config() {
         DB_PASS="iptv$(openssl rand -hex 8)"
     else
         while true; do
-            read -sp "$(echo -e "${CYAN}Database Password${NC}: ")" DB_PASS
+            read -sp "$(echo -e "${CYAN}Database Password${NC}: ")" DB_PASS </dev/tty
             echo ""
             if [ -z "$DB_PASS" ]; then
                 log_warn "Password tidak boleh kosong!"
@@ -157,7 +157,7 @@ gather_config() {
     if [ "$CLI_NON_INTERACTIVE" = "true" ]; then
         WEBSITE_URL="http://localhost:${APP_PORT}"
     else
-        read -p "$(echo -e "${CYAN}Website URL${NC} [http://localhost:${APP_PORT}]: ")" WEBSITE_URL
+        read -p "$(echo -e "${CYAN}Website URL${NC} [http://localhost:${APP_PORT}]: ")" WEBSITE_URL </dev/tty
         WEBSITE_URL=${WEBSITE_URL:-"http://localhost:${APP_PORT}"}
     fi
 
@@ -181,7 +181,7 @@ gather_config() {
     echo ""
 
     if [ "$CLI_NON_INTERACTIVE" != "true" ]; then
-        read -p "$(echo -e "${YELLOW}Lanjutkan instalasi? (y/n)${NC} ")" CONFIRM
+        read -p "$(echo -e "${YELLOW}Lanjutkan instalasi? (y/n)${NC} ")" CONFIRM </dev/tty
         if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
             log_warn "Instalasi dibatalkan."
             exit 0

@@ -256,12 +256,27 @@ deploy_app() {
     # Create install directory
     mkdir -p "$INSTALL_DIR"
 
+    # Install git if needed
+    if ! command -v git > /dev/null 2>&1; then
+        apt install -y -qq git > /dev/null 2>&1
+    fi
+
+    # Clone repository to a temporary directory
+    TMP_DIR=$(mktemp -d)
+    log_info "Mendownload source code dari GitHub..."
+    git clone -q https://github.com/Chandra2702/Panel-IPTV.git "$TMP_DIR" || {
+        log_error "Gagal mendownload source code."
+        exit 1
+    }
+
     # Copy project files (exclude node_modules and .git)
     rsync -a --exclude='node_modules' \
              --exclude='.git' \
              --exclude='admin-ui/node_modules' \
              --exclude='admin-ui/dist' \
-             "$SCRIPT_DIR/" "$INSTALL_DIR/"
+             "$TMP_DIR/" "$INSTALL_DIR/"
+
+    rm -rf "$TMP_DIR"
 
     log_success "File aplikasi tercopy."
 

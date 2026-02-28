@@ -66,11 +66,11 @@ router.get('/', async (req, res) => {
 // POST /api/admin/channels - Create channel
 router.post('/', async (req, res) => {
     try {
-        const { name, group, url, logo, epg_id, epg_chan_id } = req.body;
+        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props, position } = req.body;
 
         await pool.execute(
-            'INSERT INTO channels (name, group_title, url, logo_url, epg_id, epg_channel_id, position) VALUES (?, ?, ?, ?, ?, ?, 999)',
-            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null]
+            'INSERT INTO channels (name, group_title, url, logo_url, epg_id, epg_channel_id, position, license_type, license_key, user_agent, referrer, extra_props) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, position !== undefined ? position : 999, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null]
         );
 
         await logActivity(req.session.adminId, 'ADD_CH', `Added channel ${name}`, req.ip);
@@ -86,11 +86,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props } = req.body;
+        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props, position } = req.body;
 
         await pool.execute(
-            'UPDATE channels SET name=?, group_title=?, url=?, logo_url=?, epg_id=?, epg_channel_id=?, license_type=?, license_key=?, user_agent=?, referrer=?, extra_props=? WHERE id=?',
-            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null, id]
+            'UPDATE channels SET name=?, group_title=?, url=?, logo_url=?, epg_id=?, epg_channel_id=?, license_type=?, license_key=?, user_agent=?, referrer=?, extra_props=?, position=? WHERE id=?',
+            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null, position !== undefined ? position : 999, id]
         );
 
         await logActivity(req.session.adminId, 'EDIT_CH', `Updated channel ID ${id}`, req.ip);
@@ -135,6 +135,38 @@ router.post('/bulk-delete', async (req, res) => {
 
     } catch (err) {
         console.error('Bulk delete error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /api/admin/channels/bulk-update-position - Bulk update positions
+router.post('/bulk-update-position', async (req, res) => {
+    try {
+        const { positions } = req.body; // Array of {id, position}
+
+        if (!positions || !Array.isArray(positions)) {
+            return res.status(400).json({ error: 'Invalid data format' });
+        }
+
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            for (const item of positions) {
+                await connection.execute('UPDATE channels SET position = ? WHERE id = ?', [item.position, item.id]);
+            }
+            await connection.commit();
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
+
+        await logActivity(req.session.adminId, 'REORDER_CH', `Reordered channels`, req.ip);
+        res.json({ success: true, message: 'Urutan saluran berhasil disimpan' });
+
+    } catch (err) {
+        console.error('Bulk update position error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -271,20 +303,53 @@ router.get('/:id/check', async (req, res) => {
     try {
         const { id } = req.params;
 
-        const [[channel]] = await pool.execute('SELECT url FROM channels WHERE id = ?', [id]);
+        const [[channel]] = await pool.execute('SELECT url, user_agent, referrer FROM channels WHERE id = ?', [id]);
 
         if (!channel) {
             return res.json({ status: 'error', message: 'Channel not found' });
         }
 
-        // Simple HEAD request to check if stream is alive
+        // Custom timeout and SSL agent
+        const https = require('https');
+        const http = require('http');
+        const timeout = 10000;
+        const httpAgent = new http.Agent({ timeout });
+        const httpsAgent = new https.Agent({ timeout, rejectUnauthorized: false });
+
+        const customHeaders = {};
+        if (channel.user_agent) customHeaders['User-Agent'] = channel.user_agent;
+        if (channel.referrer) customHeaders['Referer'] = channel.referrer;
+
+        const headers = {
+            'User-Agent': customHeaders['User-Agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            ...customHeaders
+        };
+
+        // Advanced checking logic: try HEAD first, fallback to GET (stream)
         try {
-            await axios.head(channel.url, { timeout: 10000 });
+            await axios.head(channel.url, { headers, timeout, httpAgent, httpsAgent, maxRedirects: 3 });
             await pool.execute('UPDATE channels SET status = ? WHERE id = ?', ['online', id]);
             res.json({ status: 'success', result: 'online' });
-        } catch {
-            await pool.execute('UPDATE channels SET status = ? WHERE id = ?', ['offline', id]);
-            res.json({ status: 'success', result: 'offline' });
+        } catch (e) {
+            try {
+                const source = axios.CancelToken.source();
+                const reqObj = axios.get(channel.url, { headers, responseType: 'stream', timeout, httpAgent, httpsAgent, cancelToken: source.token });
+                const response = await reqObj;
+                source.cancel('Connection successful');
+
+                if (response.status >= 200 && response.status < 400) {
+                    await pool.execute('UPDATE channels SET status = ? WHERE id = ?', ['online', id]);
+                    return res.json({ status: 'success', result: 'online' });
+                }
+                throw new Error('Bad status code');
+            } catch (e2) {
+                if (axios.isCancel(e2)) {
+                    await pool.execute('UPDATE channels SET status = ? WHERE id = ?', ['online', id]);
+                    return res.json({ status: 'success', result: 'online' });
+                }
+                await pool.execute('UPDATE channels SET status = ? WHERE id = ?', ['offline', id]);
+                res.json({ status: 'success', result: 'offline' });
+            }
         }
 
     } catch (err) {
@@ -311,19 +376,54 @@ router.post('/batch-check', async (req, res) => {
             chunks.push(ids.slice(i, i + limit));
         }
 
+        // Custom timeout and SSL agent
+        const https = require('https');
+        const http = require('http');
+        const timeout = 5000;
+        const httpAgent = new http.Agent({ timeout });
+        const httpsAgent = new https.Agent({ timeout, rejectUnauthorized: false });
+
         for (const chunk of chunks) {
             const promises = chunk.map(async (id) => {
                 try {
-                    const [[channel]] = await pool.execute('SELECT url FROM channels WHERE id = ?', [id]);
+                    const [[channel]] = await pool.execute('SELECT url, user_agent, referrer FROM channels WHERE id = ?', [id]);
                     if (!channel) return;
 
+                    const customHeaders = {};
+                    if (channel.user_agent) customHeaders['User-Agent'] = channel.user_agent;
+                    if (channel.referrer) customHeaders['Referer'] = channel.referrer;
+
+                    const headers = {
+                        'User-Agent': customHeaders['User-Agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        ...customHeaders
+                    };
+
                     try {
-                        await axios.head(channel.url, { timeout: 5000 });
+                        await axios.head(channel.url, { headers, timeout, httpAgent, httpsAgent, maxRedirects: 3 });
                         updates.push({ id, status: 'online' });
                         results.online++;
                     } catch (e) {
-                        updates.push({ id, status: 'offline' });
-                        results.offline++;
+                        try {
+                            const source = axios.CancelToken.source();
+                            const reqObj = axios.get(channel.url, { headers, responseType: 'stream', timeout, httpAgent, httpsAgent, cancelToken: source.token });
+                            const response = await reqObj;
+                            source.cancel('Connection successful');
+
+                            if (response.status >= 200 && response.status < 400) {
+                                updates.push({ id, status: 'online' });
+                                results.online++;
+                            } else {
+                                throw new Error('Bad status');
+                            }
+                        } catch (e2) {
+                            if (axios.isCancel(e2)) {
+                                updates.push({ id, status: 'online' });
+                                results.online++;
+                            } else {
+                                updates.push({ id, status: 'offline' });
+                                results.offline++;
+                            }
+                        }
                     }
                 } catch (e) {
                     results.errors++;

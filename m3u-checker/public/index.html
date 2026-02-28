@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U Stream Sentinel | IPTV Status Checker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="blob-bg blob-1"></div>
+    <div class="blob-bg blob-2"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-satellite-dish"></i>
+                <h1>Stream <span>Sentinel</span></h1>
+            </div>
+            <p class="subtitle">Aplikasi Cek Status M3U & IPTV</p>
+        </header>
+
+        <main>
+            <!-- Input Section -->
+            <section id="input-section" class="glass-card fade-in">
+                <div class="tabs">
+                    <button class="tab active" data-target="upload-form">Unggah File</button>
+                    <button class="tab" data-target="url-form">Tempel URL</button>
+                </div>
+
+                <div class="tab-content active" id="upload-form">
+                    <div class="file-drop-area" id="drop-area">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <p>Tarik & Lepas file .m3u Anda di sini (Bisa banyak file)</p>
+                        <span>ATAU</span>
+                        <label for="m3u-file" class="btn btn-secondary">Pilih File</label>
+                        <input type="file" id="m3u-file" accept=".m3u,.m3u8" multiple>
+                        <p class="file-name" id="file-name-display"></p>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="url-form">
+                    <div class="input-group">
+                        <i class="fa-solid fa-link" style="top: 1.2rem;"></i>
+                        <textarea id="m3u-url"
+                            placeholder="https://contoh.com/playlist1.m3u&#10;https://contoh.com/playlist2.m3u&#10;(Satu URL per baris)"
+                            rows="4"></textarea>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button id="start-btn" class="btn btn-primary btn-large" style="margin-top: 0; flex: 1;">
+                        <i class="fa-solid fa-play"></i> MULAI SCAN
+                    </button>
+                    <button id="settings-btn" class="btn btn-secondary" style="margin-top: 0;"
+                        title="Pengaturan Scanner">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+                <div id="error-message" class="error-msg"></div>
+            </section>
+
+            <!-- Progress Section -->
+            <section id="progress-section" class="glass-card hidden">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <i class="fa-solid fa-list-ol"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Total Channel</span>
+                            <span class="stat-value" id="stat-total">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card online-glow">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Aktif</span>
+                            <span class="stat-value text-accent" id="stat-online">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card offline-glow">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Mati</span>
+                            <span class="stat-value text-danger" id="stat-offline">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <div class="stat-info">
+                            <span class="stat-label">Proses</span>
+                            <span class="stat-value" id="stat-percent">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+
+                <div class="action-bar hidden" id="action-bar">
+                    <div class="filters-search-container">
+                        <div class="filters">
+                            <button class="filter-btn active" data-filter="all">Semua</button>
+                            <button class="filter-btn" data-filter="online">Aktif</button>
+                            <button class="filter-btn" data-filter="offline">Mati</button>
+                        </div>
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="search-input" placeholder="Cari channel...">
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button id="stop-btn" class="btn btn-danger hidden">
+                            <i class="fa-solid fa-stop"></i> Stop Scan
+                        </button>
+                        <button id="export-online-btn" class="btn btn-success btn-sm">
+                            <i class="fa-solid fa-download"></i> Simpan Aktif
+                        </button>
+                        <button id="export-offline-btn" class="btn btn-danger btn-sm" style="margin-left: 0.5rem;">
+                            <i class="fa-solid fa-download"></i> Simpan Mati
+                        </button>
+                        <button id="reset-btn" class="btn btn-secondary btn-sm" style="margin-left: 0.5rem;">
+                            <i class="fa-solid fa-rotate-right"></i> Scan Ulang
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section id="results-section" class="hidden fade-in">
+                <div class="table-container glass-card">
+                    <table id="channels-table">
+                        <thead>
+                            <tr>
+                                <th>Logo</th>
+                                <th>Kategori</th>
+                                <th>Nama Channel</th>
+                                <th>URL</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="channels-body">
+                            <!-- Results inject here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination-container hidden" id="pagination-container">
+                    <div class="pagination-info">
+                        Menampilkan <span id="page-start-info">0</span> - <span id="page-end-info">0</span> dari <span
+                            id="page-total-info">0</span> channel
+                    </div>
+                    <div class="pagination-controls">
+                        <button id="prev-page" class="btn btn-secondary" disabled>
+                            <i class="fa-solid fa-chevron-left"></i> Sblm
+                        </button>
+                        <span id="page-indicator" class="page-indicator">Hal 1</span>
+                        <button id="next-page" class="btn btn-secondary" disabled>
+                            Lanjut <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Pengaturan Scanner</h2>
+                <button id="close-settings" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label for="setting-concurrency">Concurrency (Batas Pekerja)</label>
+                    <p class="setting-desc">Berapa channel yang dicek bersamaan. Jangan terlalu tinggi agar IP tidak
+                        diblokir.</p>
+                    <input type="number" id="setting-concurrency" value="30" min="1" max="100">
+                </div>
+                <div class="setting-group">
+                    <label for="setting-timeout">Batas Waktu Tunggu / Timeout (md)</label>
+                    <p class="setting-desc">Berapa lama menunggu (dalam milidetik) sebelum channel dianggap Mati.</p>
+                    <input type="number" id="setting-timeout" value="5000" min="1000" max="30000" step="1000">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-settings" class="btn btn-primary" style="width: 100%">Simpan Pengaturan</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

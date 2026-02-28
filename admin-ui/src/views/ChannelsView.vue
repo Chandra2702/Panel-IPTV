@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import Card from '@/components/ui/Card.vue'
 import CardContent from '@/components/ui/CardContent.vue'
-import { List, Plus, Trash2, Upload, Search, X, CheckCircle, XCircle, Pencil, RefreshCw } from 'lucide-vue-next'
+import { List, Plus, Trash2, Upload, Search, X, CheckCircle, XCircle, Pencil, RefreshCw, GripVertical } from 'lucide-vue-next'
+import Sortable from 'sortablejs'
 
 const checkingIds = ref<Set<number>>(new Set())
 import { apiCall } from '@/composables/useApi'
@@ -11,6 +12,7 @@ const channels = ref<any[]>([])
 const loading = ref(true)
 const showImportModal = ref(false)
 const showEditModal = ref(false)
+const isEditing = ref(true)
 const searchQuery = ref('')
 const totalChannels = ref(0)
 
@@ -26,17 +28,57 @@ const editForm = ref({
   license_key: '',
   user_agent: '',
   referrer: '',
-  extra_props: ''
+  extra_props: '',
+  position: 999
 })
 
-onMounted(() => loadData())
+const tableBodyRef = ref<HTMLElement | null>(null)
+
+onMounted(() => {
+  loadData()
+})
+
+async function initSortable() {
+  await nextTick()
+  if (tableBodyRef.value && !searchQuery.value) {
+    Sortable.create(tableBodyRef.value, {
+      handle: '.drag-handle',
+      animation: 150,
+      ghostClass: 'bg-accent',
+      onEnd: async (evt) => {
+        if (evt.oldIndex === evt.newIndex) return
+        
+        // Update local array order based on DOM movement
+        const item = channels.value.splice(evt.oldIndex as number, 1)[0]
+        channels.value.splice(evt.newIndex as number, 0, item)
+        
+        // Reassign position linearly based on new array order
+        channels.value.forEach((ch, idx) => {
+          ch.position = idx + 1
+        })
+        
+        // Send bulk update to backend
+        try {
+          const payload = channels.value.map(c => ({ id: c.id, position: c.position }))
+          await apiCall('/api/admin/channels/bulk-update-position', 'POST', { positions: payload })
+        } catch (err: any) {
+          alert('Gagal menyimpan urutan baru: ' + err.message)
+          loadData() // Revert to db state on error
+        }
+      }
+    })
+  }
+}
 
 async function loadData() {
   loading.value = true
   try {
     const data = await apiCall('/api/admin/channels?limit=9999')
     channels.value = data.channels || []
+    // Ensure sorted by position initially
+    channels.value.sort((a, b) => (a.position || 0) - (b.position || 0))
     totalChannels.value = channels.value.length
+    initSortable()
   } catch (err: any) {
     console.error(err)
   } finally {
@@ -100,7 +142,28 @@ async function checkAllStreams() {
   }
 }
 
+function openAdd() {
+  isEditing.value = false
+  editForm.value = {
+    id: 0,
+    name: '',
+    url: '',
+    group: '',
+    logo: '',
+    epg_id: 0,
+    epg_chan_id: '',
+    license_type: '',
+    license_key: '',
+    user_agent: '',
+    referrer: '',
+    extra_props: '',
+    position: channels.value.length > 0 ? Math.max(...channels.value.map(c => c.position || 0)) + 1 : 1
+  }
+  showEditModal.value = true
+}
+
 function openEdit(ch: any) {
+  isEditing.value = true
   editForm.value = {
     id: ch.id,
     name: ch.name || '',
@@ -113,18 +176,37 @@ function openEdit(ch: any) {
     license_key: ch.license_key || '',
     user_agent: ch.user_agent || '',
     referrer: ch.referrer || '',
-    extra_props: ch.extra_props || ''
+    extra_props: ch.extra_props || '',
+    position: ch.position || 0
   }
   showEditModal.value = true
 }
 
 async function saveEdit() {
   try {
-    await apiCall(`/api/admin/channels/${editForm.value.id}`, 'PUT', editForm.value)
+    if (isEditing.value) {
+      await apiCall(`/api/admin/channels/${editForm.value.id}`, 'PUT', editForm.value)
+    } else {
+      await apiCall(`/api/admin/channels`, 'POST', editForm.value)
+    }
     showEditModal.value = false
     loadData()
   } catch (err: any) {
     alert(err.message)
+  }
+}
+
+async function updatePosition(id: number, pos: number) {
+  try {
+    const ch = channels.value.find(c => c.id === id)
+    if (!ch) return
+    ch.position = pos
+    // Update db via put
+    await apiCall(`/api/admin/channels/${id}`, 'PUT', { ...ch, group: ch.group_title, logo: ch.logo_url, epg_chan_id: ch.epg_channel_id })
+    // No full reload needed, just re-sort locally to give fast UX
+    channels.value.sort((a, b) => (a.position || 0) - (b.position || 0))
+  } catch (err: any) {
+    alert('Gagal update urutan: ' + err.message)
   }
 }
 
@@ -143,9 +225,18 @@ async function checkChannel(id: number) {
 }
 
 const filteredChannels = () => {
-  if (!searchQuery.value) return channels.value
+  if (!searchQuery.value) {
+    return channels.value
+  }
   const q = searchQuery.value.toLowerCase()
   return channels.value.filter(c => c.name?.toLowerCase().includes(q) || c.group_title?.toLowerCase().includes(q))
+}
+
+const stats = () => {
+  const online = channels.value.filter(c => c.status === 'online').length
+  const offline = channels.value.filter(c => c.status === 'offline').length
+  const unchecked = channels.value.length - online - offline
+  return { online, offline, unchecked }
 }
 </script>
 
@@ -156,13 +247,35 @@ const filteredChannels = () => {
         <h1 class="text-xl font-bold tracking-tight">Saluran</h1>
         <p class="text-muted-foreground">Total: {{ totalChannels }} saluran</p>
       </div>
-      <div class="flex gap-2">
-        <button @click="checkAllStreams" :disabled="checking" class="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-accent disabled:opacity-50">
-          <CheckCircle :size="16" /> {{ checking ? `Mengecek ${checkProgress}...` : 'Cek Semua' }}
-        </button>
-        <button @click="showImportModal = true" class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90">
-          <Upload :size="16" /> Impor
-        </button>
+      
+      <div class="flex gap-4 items-center">
+        <!-- Stats Counter -->
+        <div v-if="channels.length" class="flex gap-3 text-sm px-4 py-2 bg-card border rounded-lg shadow-sm">
+          <div class="flex items-center gap-1">
+             <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+             <span class="font-medium">{{ stats().online }}</span> Aktif
+          </div>
+          <div class="flex items-center gap-1">
+             <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+             <span class="font-medium">{{ stats().offline }}</span> Mati
+          </div>
+          <div class="flex items-center gap-1 text-muted-foreground">
+             <div class="w-2.5 h-2.5 rounded-full bg-gray-300"></div>
+             <span class="font-medium">{{ stats().unchecked }}</span> Belum Cek
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button @click="openAdd" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">
+            <Plus :size="16" /> Tambah 
+          </button>
+          <button @click="checkAllStreams" :disabled="checking" class="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium hover:bg-accent disabled:opacity-50">
+            <CheckCircle :size="16" /> {{ checking ? `Mengecek ${checkProgress}...` : 'Cek Semua' }}
+          </button>
+          <button @click="showImportModal = true" class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90">
+            <Upload :size="16" /> Impor
+          </button>
+        </div>
       </div>
     </div>
 
@@ -178,21 +291,27 @@ const filteredChannels = () => {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b">
-                <th class="text-left py-3 px-2 font-medium text-muted-foreground">No</th>
+                <th class="text-left py-3 px-2 font-medium text-muted-foreground w-10"></th>
+                <th class="text-left py-3 px-2 font-medium text-muted-foreground w-12">No</th>
                 <th class="text-left py-3 px-2 font-medium text-muted-foreground">Nama</th>
                 <th class="text-left py-3 px-2 font-medium text-muted-foreground">Grup</th>
                 <th class="text-left py-3 px-2 font-medium text-muted-foreground">Status</th>
                 <th class="text-right py-3 px-2 font-medium text-muted-foreground">Aksi</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref="tableBodyRef">
               <tr v-if="loading">
-                <td colspan="5" class="text-center py-8 text-muted-foreground">Memuat...</td>
+                <td colspan="6" class="text-center py-8 text-muted-foreground">Memuat...</td>
               </tr>
               <tr v-else-if="filteredChannels().length === 0">
-                <td colspan="5" class="text-center py-8 text-muted-foreground">Tidak ada data</td>
+                <td colspan="6" class="text-center py-8 text-muted-foreground">Tidak ada data</td>
               </tr>
-              <tr v-for="(ch, i) in filteredChannels()" :key="ch.id" class="border-b hover:bg-accent/50 transition-colors">
+              <tr v-for="(ch, i) in filteredChannels()" :key="ch.id" class="border-b hover:bg-accent/50 transition-colors bg-card">
+                <td class="py-2 px-2 text-center">
+                  <button v-if="!searchQuery" class="drag-handle cursor-move text-muted-foreground hover:text-foreground p-1">
+                    <GripVertical :size="16" />
+                  </button>
+                </td>
                 <td class="py-3 px-2 text-muted-foreground">{{ i + 1 }}</td>
                 <td class="py-3 px-2 font-medium">{{ ch.name }}</td>
                 <td class="py-3 px-2">
@@ -233,7 +352,7 @@ const filteredChannels = () => {
       <div v-if="showEditModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
         <div class="bg-card rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between p-4 border-b sticky top-0 bg-card z-10">
-            <h3 class="font-bold">Edit Saluran</h3>
+            <h3 class="font-bold">{{ isEditing ? 'Edit Saluran' : 'Tambah Saluran' }}</h3>
             <button @click="showEditModal = false" class="p-1 hover:bg-accent rounded-md"><X :size="18" /></button>
           </div>
           <form @submit.prevent="saveEdit" class="p-4 space-y-4">
@@ -278,7 +397,7 @@ const filteredChannels = () => {
             </div>
 
             <!-- DRM / License -->
-            <div class="border-t pt-4">
+            <div class="border-t pt-4 mt-4">
               <p class="text-sm font-semibold mb-3 text-muted-foreground">DRM / License</p>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

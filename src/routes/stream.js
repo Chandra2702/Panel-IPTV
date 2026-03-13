@@ -1,5 +1,4 @@
 const express = require('express');
-const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const router = express.Router();
 const { pool, logActivity } = require('../config/database');
@@ -7,7 +6,7 @@ const { pool, logActivity } = require('../config/database');
 // === Performance Caches ===
 
 // Auth cache: avoids bcrypt.compare on every stream request
-// Key: "username:password" -> { userId, expDate, maxConn, allowedIps, allowedUa, ipLock, ts }
+// Key: "username:password" -> { userId, expDate, allowedIps, allowedUa, ts }
 const authCache = new Map();
 const AUTH_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
@@ -31,8 +30,6 @@ function setCachedAuth(username, password, user) {
     authCache.set(key, {
         userId: user.id,
         expDate: user.exp_date,
-        maxConn: user.max_connections,
-        ipLock: user.ip_lock,
         allowedIps: user.allowed_ips,
         allowedUa: user.allowed_ua,
         ts: Date.now()
@@ -95,7 +92,7 @@ router.get(['/', '/:filename'], async (req, res) => {
         }
 
         // Try auth cache first (skip bcrypt!)
-        let userId, expDate, userIpLock, allowedIps, maxConn;
+        let userId, expDate;
         const cached = getCachedAuth(username, password);
 
         // Block Desktop Browsers (Simple Check)
@@ -106,9 +103,6 @@ router.get(['/', '/:filename'], async (req, res) => {
         if (cached) {
             userId = cached.userId;
             expDate = cached.expDate;
-            userIpLock = cached.ipLock;
-            allowedIps = cached.allowedIps;
-            maxConn = cached.maxConn || 1;
         } else {
             // Cache miss - do full auth
             const [users] = await pool.execute('SELECT * FROM users WHERE username = ?', [username]);
@@ -129,9 +123,6 @@ router.get(['/', '/:filename'], async (req, res) => {
             setCachedAuth(username, password, user);
             userId = user.id;
             expDate = user.exp_date;
-            userIpLock = user.ip_lock;
-            allowedIps = user.allowed_ips;
-            maxConn = user.max_connections || 1;
         }
 
         // Check expiry
@@ -142,61 +133,10 @@ router.get(['/', '/:filename'], async (req, res) => {
             }
         }
 
-        // Enforce IP Lock with Max Connections (Fingerprint: IP + UA Hash)
-        let lockedIps = userIpLock ? userIpLock.split(',').map(s => s.trim()).filter(Boolean) : [];
-        maxConn = maxConn || 1; // Ensure maxConn is at least 1
-
-        // Generate Device Fingerprint (UA-only, no IP lock)
-        const uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 8);
-        const deviceId = uaHash;
-
-
-
-        // Check if device is allowed
-        let isDeviceAllowed = false;
-
-        // 1. Exact Device Match (UA hash)
-        if (lockedIps.includes(deviceId)) {
-            isDeviceAllowed = true;
-        }
-        // 2. Legacy migration: old format "IP|hash" -> match by hash part
-        else if (lockedIps.some(entry => entry.includes('|') && entry.split('|')[1] === uaHash)) {
-            isDeviceAllowed = true;
-        }
-
-        if (isDeviceAllowed) {
-            // Passthrough
-        } else {
-            // New Device trying to connect
-            let isAllowed = false;
-
-            // Check whitelist first
-            if (allowedIps) {
-                const whitelist = allowedIps.split(',').map(ip => ip.trim());
-                if (whitelist.includes(currentIp)) isAllowed = true;
-            }
-
-            if (!isAllowed) {
-                // Check if we have slots available
-                if (lockedIps.length < maxConn) {
-                    // Auto-lock new Device Fingerprint
-                    lockedIps.push(deviceId);
-                    const newLock = lockedIps.join(',');
-
-                    // Fire and forget update
-                    pool.execute('UPDATE users SET ip_lock = ? WHERE id = ?', [newLock, userId]).catch(console.error);
-
-                    // Update cache
-                    if (cached) cached.ipLock = newLock;
-
-                    console.log(`[Stream Auto-Lock] User ${username} added Device ${deviceId}. Total: ${lockedIps.length}/${maxConn}`);
-                } else {
-                    // Full
-                    console.log(`[Stream Blocked] User ${username} max connections reached (${lockedIps.length}/${maxConn}). Request from ${deviceId}`);
-                    return res.status(403).send(`Max Connections Reached (${lockedIps.length}/${maxConn})`);
-                }
-            }
-        }
+        // Device lock is NOT enforced here — only in playlist.js
+        // Reason: IPTV players often use different User-Agents for playlist vs stream
+        // (e.g. OTT Navigator uses ExoPlayer for actual streaming)
+        // Since stream URLs already contain credentials, playlist-level lock is sufficient.
 
 
         // Get channel (with cache)

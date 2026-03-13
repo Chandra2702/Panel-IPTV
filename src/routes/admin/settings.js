@@ -66,4 +66,114 @@ router.put('/', async (req, res) => {
     }
 });
 
+// ============================================================
+// BACKUP & RESTORE
+// ============================================================
+
+const BACKUP_TABLES = [
+    'admins', 'users', 'channels', 'categories', 'bouquets',
+    'bouquet_channels', 'shortlinks', 'settings', 'token_logs'
+];
+
+// GET /api/admin/settings/backup - Download full database backup as JSON
+router.get('/backup', async (req, res) => {
+    try {
+        const backup = {
+            version: '1.0',
+            created_at: new Date().toISOString(),
+            tables: {}
+        };
+
+        for (const table of BACKUP_TABLES) {
+            try {
+                const [rows] = await pool.execute(`SELECT * FROM \`${table}\``);
+                backup.tables[table] = rows;
+            } catch (e) {
+                // Table might not exist, skip
+                backup.tables[table] = [];
+            }
+        }
+
+        const filename = `iptv-backup-${new Date().toISOString().split('T')[0]}.json`;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify(backup, null, 2));
+
+    } catch (err) {
+        console.error('Backup error:', err);
+        res.status(500).json({ error: 'Gagal membuat backup' });
+    }
+});
+
+// POST /api/admin/settings/restore - Restore database from JSON backup
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB max
+
+router.post('/restore', upload.single('backup'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'File backup tidak ditemukan' });
+    }
+
+    let backup;
+    try {
+        backup = JSON.parse(req.file.buffer.toString('utf-8'));
+    } catch (e) {
+        return res.status(400).json({ error: 'File JSON tidak valid' });
+    }
+
+    if (!backup.tables) {
+        return res.status(400).json({ error: 'Format backup tidak valid (missing tables)' });
+    }
+
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    try {
+        // Disable FK checks during restore
+        await conn.execute('SET FOREIGN_KEY_CHECKS = 0');
+
+        const restored = [];
+
+        for (const table of BACKUP_TABLES) {
+            const rows = backup.tables[table];
+            if (!rows || !Array.isArray(rows) || rows.length === 0) continue;
+
+            // Truncate table
+            await conn.execute(`TRUNCATE TABLE \`${table}\``);
+
+            // Insert rows in batches
+            const columns = Object.keys(rows[0]);
+            const placeholders = columns.map(() => '?').join(',');
+            const sql = `INSERT INTO \`${table}\` (${columns.map(c => `\`${c}\``).join(',')}) VALUES (${placeholders})`;
+
+            for (const row of rows) {
+                const values = columns.map(col => {
+                    const val = row[col];
+                    if (val === null || val === undefined) return null;
+                    return val;
+                });
+                await conn.execute(sql, values);
+            }
+
+            restored.push(`${table} (${rows.length})`);
+        }
+
+        await conn.execute('SET FOREIGN_KEY_CHECKS = 1');
+        await conn.commit();
+
+        res.json({
+            success: true,
+            message: `Restore berhasil! Tabel: ${restored.join(', ')}`
+        });
+
+    } catch (err) {
+        await conn.rollback();
+        await conn.execute('SET FOREIGN_KEY_CHECKS = 1').catch(() => {});
+        console.error('Restore error:', err);
+        res.status(500).json({ error: `Restore gagal: ${err.message}` });
+    } finally {
+        conn.release();
+    }
+});
+
 module.exports = router;

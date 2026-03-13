@@ -103,26 +103,28 @@ async function handlePlaylist(req, res) {
             }
         }
 
-        // Generate Fingerprint
+        // Generate Device Fingerprint (UA-only, no IP lock)
         console.log(`[DEBUG PLAYLIST] Request from IP=${currentIpStr}, UA=${userAgent}`);
-        const uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 6);
-        const deviceId = `${currentIpStr}|${uaHash}`;
+        const uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 8);
+        const deviceId = uaHash;
         let isDeviceAllowed = false;
 
 
 
-        // 1. Exact Fingerprint Match
+        // 1. Exact Device Match (UA hash)
         if (lockedIps.includes(deviceId)) {
             isDeviceAllowed = true;
         }
-        // 2. IP Match (Loose Mode) - Allow same IP regardless of UA to handle multi-UA apps/channels
-        // Legacy Support (Strict IP Match only if no hash exists) -> Upgrade to Hash
-        else if (lockedIps.includes(currentIpStr) && !lockedIps.some(s => s.includes('|'))) {
-            const idx = lockedIps.indexOf(currentIpStr);
-            lockedIps[idx] = deviceId;
-            const newLock = lockedIps.join(',');
-            pool.execute('UPDATE users SET ip_lock = ? WHERE id = ?', [newLock, user.id]).catch(console.error);
-            isDeviceAllowed = true;
+        // 2. Legacy migration: old format "IP|hash" -> extract hash and compare
+        else {
+            const legacyMatch = lockedIps.findIndex(entry => entry.includes('|') && entry.split('|')[1] === uaHash);
+            if (legacyMatch !== -1) {
+                // Upgrade old entry to new format
+                lockedIps[legacyMatch] = deviceId;
+                const newLock = lockedIps.join(',');
+                pool.execute('UPDATE users SET ip_lock = ? WHERE id = ?', [newLock, user.id]).catch(console.error);
+                isDeviceAllowed = true;
+            }
         }
 
         if (isDeviceAllowed) {
@@ -136,8 +138,8 @@ async function handlePlaylist(req, res) {
                 const newLock = lockedIps.join(',');
                 pool.execute('UPDATE users SET ip_lock = ? WHERE id = ?', [newLock, user.id]).catch(console.error);
 
-                // Log new lock
-                await logActivity(username, 'LOCK_DEVICE', `Locked to ${deviceId}`, currentIpStr);
+                // Log new device lock
+                await logActivity(username, 'LOCK_DEVICE', `Locked to device ${deviceId}`, currentIpStr);
             } else {
                 // BLOCKED
                 console.log(`[DEBUG PLAYLIST] MAX CONN REACHED: Locked=${JSON.stringify(lockedIps)}, Current=${deviceId}`);

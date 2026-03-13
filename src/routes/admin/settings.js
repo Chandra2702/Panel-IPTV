@@ -30,7 +30,7 @@ router.put('/', async (req, res) => {
         const {
             app_name,
             smtp_host, smtp_user, smtp_pass, smtp_port, smtp_secure,
-            qris_data, telegram_bot_token, telegram_admin_id
+            live_stream_title, single_channel_url
         } = req.body;
 
         // Build update query dynamically to handle masked password
@@ -50,9 +50,8 @@ router.put('/', async (req, res) => {
         if (smtp_port !== undefined) { updates.push('smtp_port = ?'); params.push(smtp_port); }
         if (smtp_secure !== undefined) { updates.push('smtp_secure = ?'); params.push(smtp_secure ? 1 : 0); }
 
-        if (qris_data !== undefined) { updates.push('qris_data = ?'); params.push(qris_data); }
-        if (telegram_bot_token !== undefined) { updates.push('telegram_bot_token = ?'); params.push(telegram_bot_token); }
-        if (telegram_admin_id !== undefined) { updates.push('telegram_admin_id = ?'); params.push(telegram_admin_id); }
+        if (live_stream_title !== undefined) { updates.push('live_stream_title = ?'); params.push(live_stream_title); }
+        if (single_channel_url !== undefined) { updates.push('single_channel_url = ?'); params.push(single_channel_url); }
 
         if (updates.length === 0) return res.json({ success: true });
 

@@ -31,6 +31,8 @@ const playlistRoutes = require('./routes/playlist');
 const streamRoutes = require('./routes/stream');
 const shortlinkRoutes = require('./routes/shortlink');
 const adminRoutes = require('./routes/admin/index');
+const publicRoutes = require('./routes/public');
+const proxyRoutes = require('./routes/proxy');
 
 // Initialize Express app
 const panelApp = express();
@@ -73,6 +75,9 @@ panelApp.use('/api/get', playlistRoutes);
 panelApp.use('/api/stream', streamRoutes);
 panelApp.use('/api/shorten', shortlinkRoutes);
 panelApp.use('/api/admin', adminRoutes);
+panelApp.use('/api/public', publicRoutes);
+// Proxy requires raw URL parsing, we map it directly
+panelApp.use('/api/proxy', proxyRoutes);
 
 // Legacy PHP-style routes for IPTV player compatibility
 panelApp.use('/get.php', playlistRoutes);
@@ -84,6 +89,11 @@ panelApp.get('/s/:slug', require('./routes/shortlink').redirectHandler);
 // Root redirect for Panel
 panelApp.get('/', (req, res) => {
     res.redirect('/admin/');
+});
+
+// Serve live player
+panelApp.get('/live', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/live.html'));
 });
 
 // SPA fallback for Vue admin panel (must be before generic slug handler & 404)

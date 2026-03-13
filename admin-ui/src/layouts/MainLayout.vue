@@ -13,7 +13,8 @@ import {
   Link,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RadioReceiver
 } from 'lucide-vue-next'
 import { apiCall } from '@/composables/useApi'
 
@@ -26,6 +27,7 @@ const allNavigation = [
   { name: 'Beranda', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'reseller'] },
   { name: 'Pengguna', path: '/users', icon: Users, roles: ['admin', 'reseller'] },
   { name: 'Saluran', path: '/channels', icon: List, roles: ['admin'] },
+  { name: 'Live Stream', path: '/live-stream', icon: RadioReceiver, roles: ['admin'] },
   { name: 'Reseller', path: '/resellers', icon: UserCheck, roles: ['admin'] },
   { name: 'Paket Bouquet', path: '/bouquets', icon: Layers, roles: ['admin', 'reseller'] },
   { name: 'Kategori', path: '/categories', icon: Tags, roles: ['admin'] },

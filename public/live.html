@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Stream Player</title>
+    <!-- Shaka Player UI API -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.1/shaka-player.ui.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.1/controls.min.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        .main-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .header-title {
+            width: 100%;
+            max-width: 1280px;
+            padding: 20px 20px 10px 20px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+            box-sizing: border-box;
+            display: flex;
+        }
+
+        #video-container {
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16/9;
+            background: #000;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+            z-index: 50;
+        }
+
+        .top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 15px 20px;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stream-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+        }
+
+        .server-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: background 0.2s;
+        }
+
+        .server-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .server-modal {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 300px;
+            background: rgba(20, 20, 20, 0.95);
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #333;
+        }
+
+        .server-modal.open {
+            transform: translateX(0);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .server-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .server-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .server-item:hover {
+            background: #333;
+        }
+
+        .server-item.active {
+            border-color: #4CAF50;
+            background: #1e3320;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <!-- Main Webpage Header -->
+        <div id="header-title" class="header-title"></div>
+
+        <!-- Shaka Player UI container -->
+        <div id="video-container" data-shaka-player-container data-shaka-player-cast-receiver-id="1START">
+            <video id="video-player" data-shaka-player autoplay playsinline></video>
+
+            <div class="top-bar">
+                <div id="stream-title" class="stream-title">Loading...</div>
+                <button id="server-btn" class="server-btn" style="display: none;">Pilih Server</button>
+            </div>
+
+            <div id="server-modal" class="server-modal">
+                <div class="modal-header">
+                    <h3 style="margin: 0;">Multi Server</h3>
+                    <button id="close-modal-btn" class="close-btn">&times;</button>
+                </div>
+                <div id="server-list" class="server-list"></div>
+            </div>
+
+            <div id="error-message" class="error-message">
+                <h2 style="margin: 0 0 10px 0;">Stream Error</h2>
+                <p id="error-text" style="margin: 0; color: #ff6b6b;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Install built-in polyfills to patch browser incompatibilities.
+        shaka.polyfill.installAll();
+        if (shaka.Player.isBrowserSupported()) {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            console.error('Browser not supported!');
+        }
+
+        async function initApp() {
+            const video = document.getElementById('video-player');
+            const videoContainer = document.getElementById('video-container');
+            const errorMessage = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+
+            function showError(msg) {
+                errorText.textContent = msg;
+                errorMessage.style.display = 'block';
+            }
+
+            try {
+                // Fetch the stream URL from the server
+                const response = await fetch('/api/public/live-url');
+
+                if (!response.ok) {
+                    throw new Error('Live stream is not configured or currently offline.');
+                }
+
+                const data = await response.json();
+                const streams = data.streams;
+                const mainTitle = data.title || 'Live Stream';
+
+                document.title = mainTitle;
+                const headerTitleEl = document.getElementById('header-title');
+                if (headerTitleEl) headerTitleEl.textContent = mainTitle;
+
+                if (!streams || streams.length === 0) {
+                    throw new Error('Tidak ada stream yang dikonfigurasi.');
+                }
+
+                const streamTitleEl = document.getElementById('stream-title');
+                const serverBtn = document.getElementById('server-btn');
+                const serverModal = document.getElementById('server-modal');
+                const closeModalBtn = document.getElementById('close-modal-btn');
+                const serverListEl = document.getElementById('server-list');
+
+                // Initialize a single global Shaka Player instance
+                const player = new shaka.Player();
+                await player.attach(video);
+
+                // Attach UI once
+                const ui = new shaka.ui.Overlay(player, videoContainer, video);
+
+                // Listen for error events
+                player.addEventListener('error', (event) => {
+                    console.error('Error code', event.detail.code, 'object', event.detail);
+                });
+
+                let currentStreamIndex = 0;
+
+                async function loadStream(index) {
+                    currentStreamIndex = index;
+                    const config = streams[index];
+                    streamTitleEl.textContent = config.title || `Channel ${index + 1}`;
+
+                    // Add active class dynamically
+                    serverListEl.innerHTML = '';
+                    streams.forEach((s, idx) => {
+                        const div = document.createElement('div');
+                        div.className = `server-item ${idx === currentStreamIndex ? 'active' : ''}`;
+                        div.textContent = s.title || `Channel ${idx + 1}`;
+                        div.onclick = () => {
+                            serverModal.classList.remove('open');
+                            if (idx !== currentStreamIndex) loadStream(idx);
+                        };
+                        serverListEl.appendChild(div);
+                    });
+
+                    // Unload previous stream cleanly
+                    await player.unload();
+
+                    // Clear previous Network Filters so they don't stack
+                    player.getNetworkingEngine().clearAllRequestFilters();
+                    player.getNetworkingEngine().clearAllResponseFilters();
+
+                    // Add Network Filter for Headers Proxying exclusively for this stream
+                    player.getNetworkingEngine().registerRequestFilter((type, request) => {
+                        const originalUri = request.uris[0];
+                        if (originalUri && originalUri.startsWith('http') && !originalUri.includes('/api/proxy/')) {
+                            // Only proxy if we have headers configured for THIS specific stream
+                            if (config.userAgent || config.referrer) {
+                                request.uris[0] = `/api/proxy/?url=${encodeURIComponent(originalUri)}&ua=${encodeURIComponent(config.userAgent || '')}&ref=${encodeURIComponent(config.referrer || '')}`;
+                            } else {
+                                request.uris[0] = `/api/proxy/?url=${encodeURIComponent(originalUri)}`;
+                            }
+                        }
+                    });
+
+                    // Add Response Filter to restore the original URI so parsing relative segments like 'segment.mp4' works correctly!
+                    player.getNetworkingEngine().registerResponseFilter((type, response) => {
+                        if (response.uri && response.uri.includes('/api/proxy/')) {
+                            try {
+                                const urlStr = new URL(response.uri, window.location.origin);
+                                const originalUrl = urlStr.searchParams.get('url');
+                                if (originalUrl) {
+                                    response.uri = originalUrl;
+                                }
+                            } catch (e) {
+                                console.error('Response filter error', e);
+                            }
+                        }
+                    });
+
+                    // Apply newly fetched DRM credentials
+                    const playerConfig = { drm: { clearKeys: {}, servers: {} } }; // Reset keys first
+
+                    if (config.drm) {
+                        const drmType = config.drm.type ? config.drm.type.trim().toLowerCase() : '';
+                        if ((drmType === 'clearkey' || drmType === 'org.w3.clearkey') && config.drm.keyId) {
+                            playerConfig.drm.clearKeys = {
+                                [config.drm.keyId]: config.drm.key
+                            };
+                        } else if (drmType === 'widevine' && config.drm.serverURL) {
+                            playerConfig.drm.servers['com.widevine.alpha'] = config.drm.serverURL;
+                        } else if (config.drm.type === 'playready' && config.drm.serverURL) {
+                            playerConfig.drm.servers['com.microsoft.playready'] = config.drm.serverURL;
+                        } else if (config.drm.serverURL) {
+                            // Fallback generic format
+                            playerConfig.drm.servers[config.drm.type] = config.drm.serverURL;
+                        }
+                    }
+                    player.configure(playerConfig);
+
+                    try {
+                        errorText.textContent = '';
+                        errorMessage.style.display = 'none';
+                        await player.load(config.url);
+                        console.log('Video loaded:', config.title);
+                    } catch (err) {
+                        console.error("Load error:", err);
+                        showError("Gagal memuat tayangan: " + (config.title || 'Stream'));
+                    }
+                }
+
+                if (streams.length > 1) {
+                    serverBtn.style.display = 'block';
+                    serverBtn.onclick = () => serverModal.classList.add('open');
+                    closeModalBtn.onclick = () => serverModal.classList.remove('open');
+                }
+
+                // Load first stream
+                await loadStream(0);
+
+            } catch (err) {
+                console.error("Initialization error:", err);
+                showError(err.message || 'Failed to initialize the live stream.');
+            }
+        }
+    </script>
+</body>
+
+</html>

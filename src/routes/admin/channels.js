@@ -66,11 +66,11 @@ router.get('/', async (req, res) => {
 // POST /api/admin/channels - Create channel
 router.post('/', async (req, res) => {
     try {
-        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props, position } = req.body;
+        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props, position, is_live_stream } = req.body;
 
         await pool.execute(
-            'INSERT INTO channels (name, group_title, url, logo_url, epg_id, epg_channel_id, position, license_type, license_key, user_agent, referrer, extra_props) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, position !== undefined ? position : 999, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null]
+            'INSERT INTO channels (name, group_title, url, logo_url, epg_id, epg_channel_id, position, license_type, license_key, user_agent, referrer, extra_props, is_live_stream) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, position !== undefined ? position : 999, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null, is_live_stream ? 1 : 0]
         );
 
         await logActivity(req.session.adminId, 'ADD_CH', `Added channel ${name}`, req.ip);
@@ -86,11 +86,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props, position } = req.body;
+        const { name, group, url, logo, epg_id, epg_chan_id, license_type, license_key, user_agent, referrer, extra_props, position, is_live_stream } = req.body;
 
         await pool.execute(
-            'UPDATE channels SET name=?, group_title=?, url=?, logo_url=?, epg_id=?, epg_channel_id=?, license_type=?, license_key=?, user_agent=?, referrer=?, extra_props=?, position=? WHERE id=?',
-            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null, position !== undefined ? position : 999, id]
+            'UPDATE channels SET name=?, group_title=?, url=?, logo_url=?, epg_id=?, epg_channel_id=?, license_type=?, license_key=?, user_agent=?, referrer=?, extra_props=?, position=?, is_live_stream=? WHERE id=?',
+            [name, group, url, logo || null, epg_id || 0, epg_chan_id || null, license_type || null, license_key || null, user_agent || null, referrer || null, extra_props || null, position !== undefined ? position : 999, is_live_stream ? 1 : 0, id]
         );
 
         await logActivity(req.session.adminId, 'EDIT_CH', `Updated channel ID ${id}`, req.ip);

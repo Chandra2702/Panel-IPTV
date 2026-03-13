@@ -297,7 +297,7 @@ router.post('/:id/reset-ip', async (req, res) => {
         await pool.execute('UPDATE users SET ip_lock = NULL WHERE id = ?', [id]);
         await logActivity(adminId, 'RESET_IP', `Reset IP for user ID ${id}`, req.ip);
 
-        res.json({ success: true, message: 'IP Lock direset' });
+        res.json({ success: true, message: 'Device Lock direset' });
 
     } catch (err) {
         console.error('Reset IP error:', err);

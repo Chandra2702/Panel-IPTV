@@ -146,30 +146,21 @@ router.get(['/', '/:filename'], async (req, res) => {
         let lockedIps = userIpLock ? userIpLock.split(',').map(s => s.trim()).filter(Boolean) : [];
         maxConn = maxConn || 1; // Ensure maxConn is at least 1
 
-        // Generete Fingerprint
-        const uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 6);
-        const deviceId = `${currentIp}|${uaHash}`;
+        // Generate Device Fingerprint (UA-only, no IP lock)
+        const uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 8);
+        const deviceId = uaHash;
 
 
 
         // Check if device is allowed
         let isDeviceAllowed = false;
 
-        // Extract IPs for loose checking
-        const lockedIpAddresses = lockedIps.map(entry => entry.split('|')[0]);
-
-
-
-        // 1. Exact Fingerprint Match
+        // 1. Exact Device Match (UA hash)
         if (lockedIps.includes(deviceId)) {
             isDeviceAllowed = true;
         }
-
-
-        // 2. IP Match (Loose Mode) - READ-ONLY - Allow stream if IP matches, but do NOT update lock
-        else if (lockedIpAddresses.includes(currentIp)) {
-            // We allow the stream because IP is whitelisted by Playlist Login
-            // But we don't update the device signature, to keep the playlist locked to original App.
+        // 2. Legacy migration: old format "IP|hash" -> match by hash part
+        else if (lockedIps.some(entry => entry.includes('|') && entry.split('|')[1] === uaHash)) {
             isDeviceAllowed = true;
         }
 

@@ -74,7 +74,8 @@ async function initDatabase() {
       license_key TEXT NULL,
       user_agent TEXT NULL,
       referrer TEXT NULL,
-      extra_props TEXT NULL
+      extra_props TEXT NULL,
+      is_live_stream BOOLEAN DEFAULT FALSE
     )`,
 
     // Categories table
@@ -161,7 +162,8 @@ async function initDatabase() {
         smtp_secure BOOLEAN DEFAULT FALSE,
         qris_data TEXT,
         telegram_bot_token VARCHAR(255) DEFAULT '',
-        telegram_admin_id VARCHAR(255) DEFAULT ''
+        telegram_admin_id VARCHAR(255) DEFAULT '',
+        live_stream_title VARCHAR(255) DEFAULT 'Live Stream'
     )`,
 
     // Clients table
@@ -230,8 +232,10 @@ async function initDatabase() {
     'ALTER TABLE channels ADD COLUMN license_type VARCHAR(50) NULL',
     'ALTER TABLE channels ADD COLUMN license_key TEXT NULL',
     'ALTER TABLE channels ADD COLUMN user_agent TEXT NULL',
-    'ALTER TABLE channels ADD COLUMN referrer TEXT NULL',
     'ALTER TABLE channels ADD COLUMN extra_props TEXT NULL',
+    'ALTER TABLE channels ADD COLUMN is_live_stream BOOLEAN DEFAULT FALSE',
+    'ALTER TABLE settings ADD COLUMN single_channel_url TEXT NULL',
+    'ALTER TABLE settings ADD COLUMN live_stream_title VARCHAR(255) DEFAULT "Live Stream"',
   ];
   for (const sql of migrations) {
     try { await initConn.execute(sql); } catch (e) { /* column already exists */ }

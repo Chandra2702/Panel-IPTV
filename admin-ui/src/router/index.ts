@@ -24,6 +24,7 @@ const router = createRouter({
         { path: 'categories', name: 'Categories', component: () => import('@/views/CategoriesView.vue') },
         { path: 'monitor', name: 'Monitor', component: () => import('@/views/MonitorView.vue') },
         { path: 'shortlinks', name: 'Shortlinks', component: () => import('@/views/ShortlinksView.vue') },
+        { path: 'live-stream', name: 'LiveStream', component: () => import('@/views/LiveStreamConfigView.vue') },
         { path: 'settings', name: 'Settings', component: () => import('@/views/SettingsView.vue') },
       ]
     }

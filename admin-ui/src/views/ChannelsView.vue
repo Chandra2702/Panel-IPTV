@@ -29,7 +29,8 @@ const editForm = ref({
   user_agent: '',
   referrer: '',
   extra_props: '',
-  position: 999
+  position: 999,
+  is_live_stream: false
 })
 
 const tableBodyRef = ref<HTMLElement | null>(null)
@@ -157,7 +158,8 @@ function openAdd() {
     user_agent: '',
     referrer: '',
     extra_props: '',
-    position: channels.value.length > 0 ? Math.max(...channels.value.map(c => c.position || 0)) + 1 : 1
+    position: channels.value.length > 0 ? Math.max(...channels.value.map(c => c.position || 0)) + 1 : 1,
+    is_live_stream: false
   }
   showEditModal.value = true
 }
@@ -177,7 +179,8 @@ function openEdit(ch: any) {
     user_agent: ch.user_agent || '',
     referrer: ch.referrer || '',
     extra_props: ch.extra_props || '',
-    position: ch.position || 0
+    position: ch.position || 0,
+    is_live_stream: !!ch.is_live_stream
   }
   showEditModal.value = true
 }
@@ -436,6 +439,12 @@ const stats = () => {
               <textarea v-model="editForm.extra_props" rows="3"
                 class="w-full px-3 py-2 border rounded-lg bg-background focus:ring-2 focus:ring-primary focus:outline-none font-mono text-xs"
                 placeholder="#KODIPROP:..."></textarea>
+            </div>
+
+            <!-- Is Live Stream -->
+            <div class="border-t pt-4 flex items-center gap-2">
+              <input v-model="editForm.is_live_stream" type="checkbox" id="isLiveStream" class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" />
+              <label for="isLiveStream" class="text-sm font-medium">Jadikan sebagai Server Live Stream Publik</label>
             </div>
 
             <div class="flex justify-end gap-2 pt-2 border-t">

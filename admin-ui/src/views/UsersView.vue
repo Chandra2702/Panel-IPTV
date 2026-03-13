@@ -486,7 +486,7 @@ async function extendDuration() {
                 </button>
                 <button @click="unlockDevice(editUser.id)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center" :disabled="!editUser.ip_lock" :class="{'opacity-50 cursor-not-allowed': !editUser.ip_lock}">
                    <Unlock :size="18" class="text-orange-500" />
-                   <span>Reset IP</span>
+                   <span>Reset Device</span>
                 </button>
                 <button @click="openShareModal(editUser)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center">
                    <MessageCircle :size="18" class="text-green-600" />
@@ -517,7 +517,7 @@ async function extendDuration() {
               </select>
             </div>
             <div>
-              <label class="text-sm font-medium mb-1 block">IP Perangkat Terhubung</label>
+              <label class="text-sm font-medium mb-1 block">Perangkat Terhubung</label>
               <input :value="editUser.ip_lock || '-'" disabled class="w-full px-3 py-2 border rounded-lg bg-gray-100 text-muted-foreground cursor-not-allowed font-mono text-xs" />
             </div>
             <div class="flex justify-end gap-2 pt-2">

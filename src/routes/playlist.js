@@ -199,13 +199,13 @@ function generateM3UContent(channels, username, password, req) {
         output += `#EXTINF:-1 group-title="${ch.group_title || ''}" tvg-logo="${ch.logo_url || ''}",${ch.name}\n`;
 
         // Extra props (DRM, UA, Referrer)
+        if (ch.user_agent) output += `#EXTVLCOPT:http-user-agent=${ch.user_agent}\n`;
+        if (ch.referrer) output += `#EXTVLCOPT:http-referrer=${ch.referrer}\n`;
+        if (ch.license_type) output += `#KODIPROP:inputstream.adaptive.license_type=${ch.license_type}\n`;
+        if (ch.license_key) output += `#KODIPROP:inputstream.adaptive.license_key=${ch.license_key}\n`;
+
         if (ch.extra_props) {
             output += ch.extra_props.trim() + '\n';
-        } else {
-            if (ch.user_agent) output += `#EXTVLCOPT:http-user-agent=${ch.user_agent}\n`;
-            if (ch.referrer) output += `#EXTVLCOPT:http-referrer=${ch.referrer}\n`;
-            if (ch.license_type) output += `#KODIPROP:inputstream.adaptive.license_type=${ch.license_type}\n`;
-            if (ch.license_key) output += `#KODIPROP:inputstream.adaptive.license_key=${ch.license_key}\n`;
         }
 
         // Stream URL (Proxy via /api/stream for Monitoring)

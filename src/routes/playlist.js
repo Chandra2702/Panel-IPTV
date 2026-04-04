@@ -199,10 +199,22 @@ function generateM3UContent(channels, username, password, req) {
         output += `#EXTINF:-1 group-title="${ch.group_title || ''}" tvg-logo="${ch.logo_url || ''}",${ch.name}\n`;
 
         // Extra props (DRM, UA, Referrer)
-        if (ch.user_agent) output += `#EXTVLCOPT:http-user-agent=${ch.user_agent}\n`;
-        if (ch.referrer) output += `#EXTVLCOPT:http-referrer=${ch.referrer}\n`;
+        let streamHeaders = [];
+        if (ch.user_agent) {
+            output += `#EXTVLCOPT:http-user-agent=${ch.user_agent}\n`;
+            streamHeaders.push(`user-agent=${ch.user_agent}`);
+        }
+        if (ch.referrer) {
+            output += `#EXTVLCOPT:http-referrer=${ch.referrer}\n`;
+            streamHeaders.push(`Referer=${ch.referrer}`);
+        }
+        
         if (ch.license_type) output += `#KODIPROP:inputstream.adaptive.license_type=${ch.license_type}\n`;
         if (ch.license_key) output += `#KODIPROP:inputstream.adaptive.license_key=${ch.license_key}\n`;
+
+        if (streamHeaders.length > 0 && (!ch.extra_props || !ch.extra_props.includes('stream_headers'))) {
+            output += `#KODIPROP:inputstream.adaptive.stream_headers=${streamHeaders.join('&')}\n`;
+        }
 
         if (ch.extra_props) {
             output += ch.extra_props.trim() + '\n';

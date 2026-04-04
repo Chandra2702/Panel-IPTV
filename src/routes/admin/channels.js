@@ -232,29 +232,22 @@ router.post('/import', upload.single('m3u_file'), async (req, res) => {
                         referrer: '',
                         extra_props: ''
                     };
-                    propsBuffer = '';
+                    // DO NOT clear propsBuffer here. Keep accumlating.
 
                 } else if (line.startsWith('#KODIPROP:') || line.startsWith('#EXTVLCOPT:')) {
                     propsBuffer += line + '\n';
-
-                    // Only update if currentInfo exists
-                    if (currentInfo) {
-                        if (line.includes('license_type=')) {
-                            currentInfo.license_type = line.split('=')[1] || '';
-                        }
-                        if (line.includes('license_key=')) {
-                            currentInfo.license_key = line.split('=').slice(1).join('=') || '';
-                        }
-                        if (line.includes('http-user-agent=')) {
-                            currentInfo.user_agent = line.split('=')[1] || '';
-                        }
-                        if (line.includes('http-referrer=')) {
-                            currentInfo.referrer = line.split('=')[1] || '';
-                        }
-                    }
-
+                    
                 } else if (!line.startsWith('#') && currentInfo) {
                     currentInfo.extra_props = propsBuffer.trim();
+
+                    // Extract standard components from the buffer to populate columns if they weren't matched
+                    const propsLines = propsBuffer.split('\n');
+                    for (const pl of propsLines) {
+                        if (pl.includes('license_type=')) currentInfo.license_type = pl.split('=')[1] || '';
+                        if (pl.includes('license_key=')) currentInfo.license_key = pl.split('=').slice(1).join('=') || '';
+                        if (pl.includes('http-user-agent=')) currentInfo.user_agent = pl.split('=')[1] || '';
+                        if (pl.includes('http-referrer=')) currentInfo.referrer = pl.split('=')[1] || '';
+                    }
 
                     // Check for duplicate (same name + same url)
                     const [existing] = await conn.execute(
@@ -277,6 +270,7 @@ router.post('/import', upload.single('m3u_file'), async (req, res) => {
                         imported++;
                     }
                     currentInfo = null;
+                    propsBuffer = '';
                 }
             }
 

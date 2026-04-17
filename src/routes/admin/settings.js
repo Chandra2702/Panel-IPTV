@@ -148,8 +148,19 @@ router.post('/restore', upload.single('backup'), async (req, res) => {
 
             for (const row of rows) {
                 const values = columns.map(col => {
-                    const val = row[col];
+                    let val = row[col];
                     if (val === null || val === undefined) return null;
+                    
+                    // Handle Date objects (shouldn't happen after JSON parse, but just in case)
+                    if (val instanceof Date) {
+                        return val.toISOString().replace('T', ' ').substring(0, 19);
+                    }
+                    
+                    // MySQL strict mode datetime fix - convert ISO 8601 to MySQL format
+                    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
+                        return val.replace('T', ' ').substring(0, 19);
+                    }
+                    
                     return val;
                 });
                 await conn.execute(sql, values);

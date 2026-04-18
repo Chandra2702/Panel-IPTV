@@ -54,15 +54,36 @@ Panel manajemen IPTV berbasis **Node.js + Express + MySQL/MariaDB** dengan Admin
 
 ## 🚀 Instalasi
 
-### Auto Install (Ubuntu/Debian/Armbian)
+### Instalasi Otomatis via Terminal (Recommended)
 
+Anda dapat menginstal Panel IPTV dalam satu baris perintah menggunakan **cURL** atau **Wget**:
+
+**Menggunakan cURL:**
 ```bash
-sudo bash install.sh
+curl -fsSL https://raw.githubusercontent.com/Chandra2702/Panel-IPTV/main/install.sh | sudo bash
 ```
 
-Dengan opsi:
+**Menggunakan Wget:**
 ```bash
-sudo bash install.sh --port 8080 --db-name iptv --db-user iptv --db-pass secretpass
+wget -qO- https://raw.githubusercontent.com/Chandra2702/Panel-IPTV/main/install.sh | sudo bash
+```
+
+*(Untuk opsi tingkat lanjut, unduh file `install.sh` dan jalankan seperti: `sudo bash install.sh --port 8080 --db-name iptv`)*
+
+---
+
+### Update Otomatis via Terminal (One-Click Update)
+
+Jika Anda ingin memperbarui (update) instalasi ke versi GitHub terbaru tanpa kehilangan data:
+
+**Menggunakan cURL:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Chandra2702/Panel-IPTV/main/update.sh | sudo bash
+```
+
+**Menggunakan Wget:**
+```bash
+wget -qO- https://raw.githubusercontent.com/Chandra2702/Panel-IPTV/main/update.sh | sudo bash
 ```
 
 ### Manual Install

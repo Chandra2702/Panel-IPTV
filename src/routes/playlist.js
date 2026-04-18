@@ -51,12 +51,23 @@ async function handlePlaylist(req, res) {
             return res.status(401).send('User/Pass Salah');
         }
 
+        const hostUrl = `${req.protocol}://${req.get('host')}`;
+
+        if (user.active === 0) {
+            res.set('Content-Type', 'audio/x-mpegurl');
+            return res.send(`#EXTM3U\n#EXTINF:-1,⛔ AKUN DIBLOKIR\n${hostUrl}/blocked.mp4\n`);
+        }
+
         // Check expiry
         if (user.exp_date) {
-            const today = new Date().toISOString().split('T')[0];
-            if (today > user.exp_date) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const userExp = new Date(user.exp_date);
+            userExp.setHours(23, 59, 59, 999); // expires at end of day
+            
+            if (today > userExp) {
                 res.set('Content-Type', 'audio/x-mpegurl');
-                return res.send('#EXTM3U\n#EXTINF:-1,⛔ MASA AKTIF HABIS\nhttp://localhost/blocked\n');
+                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ MASA AKTIF HABIS\n${hostUrl}/expired.mp4\n`);
             }
         }
 
@@ -83,7 +94,7 @@ async function handlePlaylist(req, res) {
                     }
 
                     res.set('Content-Type', 'audio/x-mpegurl');
-                    return res.send('#EXTM3U\n#EXTINF:-1,⛔ DESKTOP BROWSER BLOCKED. USE APP.\nhttp://localhost/blocked\n');
+                    return res.send(`#EXTM3U\n#EXTINF:-1,⛔ DESKTOP BROWSER BLOCKED. USE APP.\n${hostUrl}/blocked.mp4\n`);
                 }
             }
 
@@ -99,7 +110,7 @@ async function handlePlaylist(req, res) {
                 }
 
                 res.set('Content-Type', 'audio/x-mpegurl');
-                return res.send('#EXTM3U\n#EXTINF:-1,⛔ MOBILE BROWSER BLOCKED. USE APP.\nhttp://localhost/blocked\n');
+                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ MOBILE BROWSER BLOCKED. USE APP.\n${hostUrl}/blocked.mp4\n`);
             }
         }
 
@@ -144,7 +155,7 @@ async function handlePlaylist(req, res) {
                 // BLOCKED
                 console.log(`[DEBUG PLAYLIST] MAX CONN REACHED: Locked=${JSON.stringify(lockedIps)}, Current=${deviceId}`);
                 res.set('Content-Type', 'audio/x-mpegurl');
-                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ MAX CONNECTION REACHED (${lockedIps.length}/${user.max_connections || 1})\nhttp://localhost/blocked\n`);
+                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ MAX CONNECTION REACHED (${lockedIps.length}/${user.max_connections || 1})\n${hostUrl}/full.mp4\n`);
             }
         }
 
@@ -153,7 +164,7 @@ async function handlePlaylist(req, res) {
             const allowedList = user.allowed_ips.split(',').map(ip => ip.trim());
             if (!allowedList.includes(currentIp)) {
                 res.set('Content-Type', 'audio/x-mpegurl');
-                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ IP BLOCKED (${currentIp})\nhttp://localhost/blocked\n`);
+                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ IP BLOCKED (${currentIp})\n${hostUrl}/blocked.mp4\n`);
             }
         }
 
@@ -162,7 +173,7 @@ async function handlePlaylist(req, res) {
             const ua = req.headers['user-agent'] || '';
             if (!ua.toLowerCase().includes(user.allowed_ua.toLowerCase())) {
                 res.set('Content-Type', 'audio/x-mpegurl');
-                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ PLAYER RESTRICTED (${user.allowed_ua} Only)\nhttp://localhost/blocked\n`);
+                return res.send(`#EXTM3U\n#EXTINF:-1,⛔ PLAYER RESTRICTED (${user.allowed_ua} Only)\n${hostUrl}/blocked.mp4\n`);
             }
         }
 
@@ -227,7 +238,7 @@ function generateM3UContent(channels, username, password, req) {
         if (ch.url.includes('.mpd')) extension = '/stream.mpd';
         else if (ch.url.includes('.m3u8')) extension = '/stream.m3u8';
 
-        output += `${hostUrl}/api/stream${extension}?id=${ch.id}&u=${username}&p=${password}\n`;
+        output += `${hostUrl}/api/stream${extension}?id=${ch.id}&u=${encodeURIComponent(username)}&p=${encodeURIComponent(password)}\n`;
     }
 
     return output;

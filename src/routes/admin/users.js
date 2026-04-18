@@ -200,7 +200,8 @@ router.put('/:id', async (req, res) => {
         ];
 
         if (password) {
-            sql += ', password_hash = ?';
+            sql += ', password = ?, password_hash = ?';
+            params.push(password);
             params.push(await bcrypt.hash(password, 10));
         }
 
@@ -234,6 +235,19 @@ router.delete('/:id', async (req, res) => {
         const adminId = req.session.adminId;
         const adminRole = req.session.adminRole;
 
+        let selectSql = 'SELECT username FROM users WHERE id = ?';
+        const selectParams = [id];
+        if (adminRole === 'reseller') {
+            selectSql += ' AND owner_id = ?';
+            selectParams.push(adminId);
+        }
+        const [users] = await pool.execute(selectSql, selectParams);
+        
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'User tidak ditemukan' });
+        }
+        const username = users[0].username;
+
         let sql = 'DELETE FROM users WHERE id = ?';
         const params = [id];
 
@@ -247,6 +261,9 @@ router.delete('/:id', async (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'User tidak ditemukan' });
         }
+
+        // Delete associated shortlinks
+        await pool.execute('DELETE FROM shortlinks WHERE slug = ? OR dest_url LIKE ?', [username, `%username=${username}&%`]);
 
         await logActivity(adminId, 'DEL_USER', `Deleted user ID ${id}`, req.ip);
         res.json({ success: true, message: 'User dihapus' });
@@ -269,6 +286,15 @@ router.post('/bulk-delete', async (req, res) => {
         }
 
         const placeholders = ids.map(() => '?').join(',');
+        
+        let selectSql = `SELECT username FROM users WHERE id IN (${placeholders})`;
+        const selectParams = [...ids];
+        if (adminRole === 'reseller') {
+            selectSql += ' AND owner_id = ?';
+            selectParams.push(adminId);
+        }
+        const [usersToDelete] = await pool.execute(selectSql, selectParams);
+
         let sql = `DELETE FROM users WHERE id IN (${placeholders})`;
         const params = [...ids];
 
@@ -278,6 +304,12 @@ router.post('/bulk-delete', async (req, res) => {
         }
 
         const [result] = await pool.execute(sql, params);
+
+        if (usersToDelete.length > 0 && result.affectedRows > 0) {
+             for (const u of usersToDelete) {
+                  await pool.execute('DELETE FROM shortlinks WHERE slug = ? OR dest_url LIKE ?', [u.username, `%username=${u.username}&%`]);
+             }
+        }
 
         await logActivity(adminId, 'BULK_DEL_USER', `Deleted ${result.affectedRows} users`, req.ip);
         res.json({ success: true, message: `${result.affectedRows} users dihapus` });
@@ -301,6 +333,43 @@ router.post('/:id/reset-ip', async (req, res) => {
 
     } catch (err) {
         console.error('Reset IP error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /api/admin/users/:id/toggle-block - Toggle active status (block/unblock)
+router.post('/:id/toggle-block', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const adminId = req.session.adminId;
+        const adminRole = req.session.adminRole;
+
+        let sql = 'SELECT active, username FROM users WHERE id = ?';
+        const params = [id];
+
+        if (adminRole === 'reseller') {
+            sql += ' AND owner_id = ?';
+            params.push(adminId);
+        }
+
+        const [users] = await pool.execute(sql, params);
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'User tidak ditemukan' });
+        }
+
+        const newStatus = users[0].active ? 0 : 1;
+        
+        await pool.execute('UPDATE users SET active = ? WHERE id = ?', [newStatus, id]);
+        await logActivity(adminId, newStatus ? 'UNBLOCK_USER' : 'BLOCK_USER', `${newStatus ? 'Unblocked' : 'Blocked'} user ${users[0].username}`, req.ip);
+
+        res.json({ 
+            success: true, 
+            message: newStatus ? 'User berhasil diaktifkan kembali' : 'User berhasil diblokir',
+            new_status: newStatus 
+        });
+
+    } catch (err) {
+        console.error('Toggle block error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

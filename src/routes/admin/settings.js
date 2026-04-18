@@ -187,4 +187,38 @@ router.post('/restore', upload.single('backup'), async (req, res) => {
     }
 });
 
+// POST /api/admin/settings/upload-video - Upload blocked.mp4
+const fs = require('fs');
+const path = require('path');
+const uploadVideo = multer({ 
+    storage: multer.memoryStorage(), 
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'video/mp4') cb(null, true);
+        else cb(new Error('Hanya file MP4 yang diizinkan!'));
+    }
+});
+
+router.post('/upload-video/:type', uploadVideo.single('video'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'File video tidak ditemukan' });
+    }
+
+    const { type } = req.params;
+    const allowedTypes = ['blocked', 'expired', 'full'];
+    if (!allowedTypes.includes(type)) {
+        return res.status(400).json({ error: 'Tipe video tidak valid' });
+    }
+
+    try {
+        // Save to public/[type].mp4
+        const publicPath = path.join(__dirname, `../../../public/${type}.mp4`);
+        fs.writeFileSync(publicPath, req.file.buffer);
+        res.json({ success: true, message: `Video peringatan ${type} berhasil diperbarui!` });
+    } catch (err) {
+        console.error('Upload video error:', err);
+        res.status(500).json({ error: 'Gagal menyimpan file video' });
+    }
+});
+
 module.exports = router;

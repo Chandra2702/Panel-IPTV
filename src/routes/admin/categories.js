@@ -15,7 +15,6 @@ router.get('/', async (req, res) => {
             GROUP BY c.id 
             ORDER BY c.name ASC
         `);
-        console.log('Categories data sample:', categories[0]);
         res.json({ categories });
     } catch (err) {
         console.error(err);

@@ -32,6 +32,7 @@ function setCachedAuth(username, password, user) {
         expDate: user.exp_date,
         allowedIps: user.allowed_ips,
         allowedUa: user.allowed_ua,
+        active: user.active,
         ts: Date.now()
     });
     // Limit cache size
@@ -92,7 +93,7 @@ router.get(['/', '/:filename'], async (req, res) => {
         }
 
         // Try auth cache first (skip bcrypt!)
-        let userId, expDate;
+        let userId, expDate, activeStatus;
         const cached = getCachedAuth(username, password);
 
         // Block Desktop Browsers (Simple Check)
@@ -103,6 +104,7 @@ router.get(['/', '/:filename'], async (req, res) => {
         if (cached) {
             userId = cached.userId;
             expDate = cached.expDate;
+            activeStatus = cached.active;
         } else {
             // Cache miss - do full auth
             const [users] = await pool.execute('SELECT * FROM users WHERE username = ?', [username]);
@@ -123,13 +125,25 @@ router.get(['/', '/:filename'], async (req, res) => {
             setCachedAuth(username, password, user);
             userId = user.id;
             expDate = user.exp_date;
+            activeStatus = user.active;
+        }
+
+        const hostUrl = `${req.protocol}://${req.get('host')}`;
+        
+        // Check if user is blocked
+        if (activeStatus === 0) {
+            return res.redirect(302, `${hostUrl}/blocked.mp4`);
         }
 
         // Check expiry
         if (expDate) {
-            const today = new Date().toISOString().split('T')[0];
-            if (today > expDate) {
-                return res.status(403).send('Expired');
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const userExp = new Date(expDate);
+            userExp.setHours(23, 59, 59, 999); // expires at end of day
+            
+            if (today > userExp) {
+                return res.redirect(302, `${hostUrl}/expired.mp4`);
             }
         }
 

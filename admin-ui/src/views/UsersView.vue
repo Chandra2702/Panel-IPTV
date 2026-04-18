@@ -4,7 +4,7 @@ import Card from '@/components/ui/Card.vue'
 import CardHeader from '@/components/ui/CardHeader.vue'
 import CardTitle from '@/components/ui/CardTitle.vue'
 import CardContent from '@/components/ui/CardContent.vue'
-import { Users, Plus, Trash2, Edit, Search, X, Link, Unlock, MessageCircle, Copy, ExternalLink, Clock } from 'lucide-vue-next'
+import { Users, Plus, Trash2, Edit, Search, X, Link, Unlock, MessageCircle, Copy, ExternalLink, Clock, Ban, CheckCircle } from 'lucide-vue-next'
 import { apiCall } from '@/composables/useApi'
 
 const users = ref<any[]>([])
@@ -211,10 +211,16 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('id-ID')
 }
 
-function isUserActive(user: any) {
-  if (!user.exp_date) return true // no expiry = always active
+function getUserStatus(user: any) {
+  if (user.active === 0) return 'Diblokir'
+  if (!user.exp_date) return 'Aktif'
   const today = new Date().toISOString().split('T')[0]
-  return today <= user.exp_date.split('T')[0]
+  if (today > user.exp_date.split('T')[0]) return 'Nonaktif'
+  return 'Aktif'
+}
+
+function isUserActive(user: any) {
+  return getUserStatus(user) === 'Aktif'
 }
 
 function getBouquetName(user: any) {
@@ -243,6 +249,20 @@ async function unlockDevice(userId: number) {
     loadData()
   } catch (err: any) {
     alert(err.message)
+    alert(err.message)
+  }
+}
+
+async function toggleBlock(userId: number) {
+  if (!confirm('Ubah status blokir pengguna ini?')) return
+  try {
+    const res = await apiCall(`/api/admin/users/${userId}/toggle-block`, 'POST')
+    alert(res.message)
+    loadData()
+    if (showEditModal.value && editUser.value.id === userId) {
+        editUser.value.active = res.new_status
+    }
+  } catch (err: any) {
     alert(err.message)
   }
 }
@@ -367,8 +387,9 @@ async function extendDuration() {
                 <td class="py-3 px-2">
                   <span :class="[
                     'px-2 py-1 rounded-full text-xs font-medium',
-                    isUserActive(user) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  ]">{{ isUserActive(user) ? 'Aktif' : 'Nonaktif' }}</span>
+                    getUserStatus(user) === 'Aktif' ? 'bg-green-100 text-green-700' :
+                    getUserStatus(user) === 'Diblokir' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                  ]">{{ getUserStatus(user) }}</span>
                 </td>
                 <td class="py-3 px-2 font-medium">{{ user.username }}</td>
                 <td class="py-3 px-2">{{ getBouquetName(user) }}</td>
@@ -479,18 +500,23 @@ async function extendDuration() {
           </div>
           <div class="p-4 space-y-4">
              <!-- Quick Actions -->
-             <div class="grid grid-cols-3 gap-2">
-                <button @click="openExtend(editUser)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center">
+             <div class="grid grid-cols-4 gap-2">
+                <button type="button" @click="openExtend(editUser)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center">
                    <Clock :size="18" class="text-purple-600" />
-                   <span>Perpanjang</span>
+                   <span class="truncate w-full">Perpanj.</span>
                 </button>
-                <button @click="unlockDevice(editUser.id)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center" :disabled="!editUser.ip_lock" :class="{'opacity-50 cursor-not-allowed': !editUser.ip_lock}">
+                <button type="button" @click="unlockDevice(editUser.id)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center" :disabled="!editUser.ip_lock" :class="{'opacity-50 cursor-not-allowed': !editUser.ip_lock}">
                    <Unlock :size="18" class="text-orange-500" />
-                   <span>Reset Device</span>
+                   <span class="truncate w-full">Reset</span>
                 </button>
-                <button @click="openShareModal(editUser)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center">
+                <button type="button" @click="openShareModal(editUser)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center">
                    <MessageCircle :size="18" class="text-green-600" />
-                   <span>Share</span>
+                   <span class="truncate w-full">Share</span>
+                </button>
+                <button type="button" @click="toggleBlock(editUser.id)" class="flex flex-col items-center justify-center p-2 border rounded-lg hover:bg-accent hover:border-primary/50 transition-colors gap-1 text-xs font-medium text-center" :class="editUser.active === 0 ? 'bg-red-50 border-red-200' : ''">
+                   <CheckCircle v-if="editUser.active === 0" :size="18" class="text-green-600" />
+                   <Ban v-else :size="18" class="text-red-600" />
+                   <span class="truncate w-full">{{ editUser.active === 0 ? 'Unblock' : 'Blokir' }}</span>
                 </button>
              </div>
              
